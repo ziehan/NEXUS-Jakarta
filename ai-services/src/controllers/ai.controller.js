@@ -2,79 +2,73 @@ const validateReport = require("../agents/intakeAgent");
 const createPlan = require("../agents/planningAgent");
 const verifyRepair = require("../agents/verificationAgent");
 
-function requireFields(body, fields) {
-  const missing = fields.filter(
-    (field) => typeof body[field] !== "string" || !body[field].trim(),
-  );
-  if (missing.length) {
-    const error = new Error(`Missing required fields: ${missing.join(", ")}`);
-    error.statusCode = 400;
-    throw error;
-  }
+function missingFields(body, fields) {
+  return fields.filter((field) => {
+    const value = body?.[field];
+    return value === undefined || value === null
+      || (typeof value === "string" && !value.trim());
+  });
+}
+
+function validationResponse(res, fields) {
+  return res.status(200).json({
+    success: false,
+    fallbackUsed: false,
+    usedProvider: "none",
+    executionTimeMs: 0,
+    error: `Missing required fields: ${fields.join(", ")}`,
+    data: null,
+  });
+}
+
+function controllerFailure(res, error, agentName) {
+  console.error(`[ai-services] ${agentName} controller error:`, error);
+  return res.status(200).json({
+    success: false,
+    fallbackUsed: true,
+    usedProvider: "safe-default",
+    executionTimeMs: 0,
+    error: "AI service temporarily unavailable",
+    data: null,
+  });
 }
 
 /**
- * Handles SCRUM-1 report validation.
+ * Handles Agent 1 intake and deduplication.
  */
-async function validate(req, res, next) {
+async function validate(req, res) {
+  const missing = missingFields(req.body, [
+    "title", "description", "category", "locationAddress",
+    "latitude", "longitude", "photoUrl", "existingReports",
+  ]);
+  if (missing.length) return validationResponse(res, missing);
   try {
-    requireFields(req.body, ["title", "description", "location"]);
-    return res.json({ success: true, data: await validateReport(req.body) });
-  } catch (error) {
-    return next(error);
-  }
+    return res.status(200).json(await validateReport(req.body));
+  } catch (error) { return controllerFailure(res, error, "Intake"); }
 }
 
 /**
- * Handles SCRUM-2 dispatch planning.
+ * Handles Agent 2 planning and dispatch.
  */
-async function plan(req, res, next) {
+async function plan(req, res) {
+  const missing = missingFields(req.body, [
+    "reportId", "title", "description", "category", "locationAddress", "duplicateCount",
+  ]);
+  if (missing.length) return validationResponse(res, missing);
   try {
-    requireFields(req.body, [
-      "reportId",
-      "title",
-      "description",
-      "category",
-      "location",
-    ]);
-    return res.json({ success: true, data: await createPlan(req.body) });
-  } catch (error) {
-    return next(error);
-  }
+    return res.status(200).json(await createPlan(req.body));
+  } catch (error) { return controllerFailure(res, error, "Planning"); }
 }
 
 /**
- * Handles SCRUM-9 field verification.
+ * Handles Agent 3 visual verification and audit.
  */
-async function verify(req, res, next) {
+async function verify(req, res) {
+  const missing = missingFields(req.body, ["beforePhotoUrl", "afterPhotoUrl", "reportDescription"]);
+  if (missing.length) return validationResponse(res, missing);
   try {
-    const missing = [
-      "originalReport",
-      "proofPhotoBase64",
-      "officerNotes",
-    ].filter(
-      (field) =>
-        req.body[field] === undefined ||
-        req.body[field] === null ||
-        (typeof req.body[field] === "string" && !req.body[field].trim()),
-    );
-    if (missing.length) {
-      const error = new Error(`Missing required fields: ${missing.join(", ")}`);
-      error.statusCode = 400;
-      throw error;
-    }
-    if (
-      typeof req.body.originalReport !== "object" ||
-      Array.isArray(req.body.originalReport)
-    ) {
-      const error = new Error("originalReport must be an object");
-      error.statusCode = 400;
-      throw error;
-    }
-    return res.json({ success: true, data: await verifyRepair(req.body) });
-  } catch (error) {
-    return next(error);
-  }
+    return res.status(200).json(await verifyRepair(req.body));
+  } catch (error) { return controllerFailure(res, error, "Verification"); }
 }
 
 module.exports = { validate, plan, verify };

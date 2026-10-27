@@ -7,11 +7,14 @@
  */
 function errorMiddleware(error, req, res, next) {
   if (res.headersSent) return next(error);
-  const status = Number.isInteger(error.statusCode) ? error.statusCode : 500;
-  if (status >= 500) console.error("[ai-services]", error.message);
-  return res.status(status).json({
+  console.error("[ai-services] Unhandled request error:", error);
+  return res.status(200).json({
     success: false,
-    error: status >= 500 ? "AI service temporarily unavailable" : error.message,
+    fallbackUsed: true,
+    usedProvider: "safe-default",
+    executionTimeMs: 0,
+    error: "AI service temporarily unavailable",
+    data: null,
   });
 }
 

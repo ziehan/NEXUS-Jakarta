@@ -1,5 +1,6 @@
 const allowedStatuses = new Set([
   "Pending",
+  "PENDING_AI",
   "Approved",
   "In_Progress",
   "Resolved",
@@ -20,22 +21,26 @@ function sanitize(value) {
 
 function validateReportPayload(req, res, next) {
   req.body = sanitize(req.body);
-  const { title, description, category, latitude, longitude } = req.body;
-  if (
-    req.method === "POST" &&
-    (!title ||
-      !description ||
-      !category ||
-      !Number.isFinite(Number(latitude)) ||
-      !Number.isFinite(Number(longitude)))
-  ) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "title, description, category, latitude, and longitude are required",
-      });
+  const reportSchema = z.object({
+    title: z.string().min(1),
+    description: z.string().min(1),
+    category: z.string().min(1),
+    latitude: z.coerce.number().finite().min(-90).max(90),
+    longitude: z.coerce.number().finite().min(-180).max(180),
+  }).passthrough();
+  const result = reportSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid report payload",
+      errors: result.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
   }
+  req.body = result.data;
+  const { latitude, longitude } = req.body;
   if (req.body.status && !allowedStatuses.has(req.body.status))
     return res.status(400).json({ error: "Invalid status" });
   if (req.body.priority && !allowedPriorities.has(req.body.priority))
@@ -56,3 +61,4 @@ function validateReportPayload(req, res, next) {
 }
 
 module.exports = { validateReportPayload };
+const { z } = require("zod");

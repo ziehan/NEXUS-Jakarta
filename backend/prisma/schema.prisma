@@ -8,6 +8,7 @@ datasource db {
 
 enum ReportStatus {
   Pending
+  PENDING_AI
   Approved
   In_Progress
   Resolved
@@ -40,6 +41,13 @@ model Report {
   latitude        Float
   longitude       Float
   photoUrl        String?
+  parentReportId  String?      @db.Uuid
+  parentReport    Report?      @relation("ReportDuplicates", fields: [parentReportId], references: [id], onDelete: Cascade)
+  duplicates      Report[]     @relation("ReportDuplicates")
+  isDuplicate     Boolean      @default(false)
+  duplicateCount  Int          @default(0)
+  aiProcessed     Boolean      @default(false)
+  requiresHumanReview Boolean   @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   actionPlan      ActionPlan?
@@ -50,6 +58,7 @@ model Report {
   @@index([status])
   @@index([category])
   @@index([priority])
+  @@index([parentReportId])
 }
 
 model ActionPlan {
@@ -59,6 +68,7 @@ model ActionPlan {
   confidenceScore Float
   estimatedDays  Int
   actionSteps    Json
+  confidenceMetadata Json?
   approvedBy     String?
   approvedAt     DateTime?
   createdAt      DateTime @default(now())

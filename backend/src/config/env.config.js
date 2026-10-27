@@ -24,6 +24,8 @@ module.exports = Object.freeze({
     /\/+$/,
     "",
   ),
+  enableAiFallbackDefault:
+    String(process.env.ENABLE_AI_FALLBACK_DEFAULT).toLowerCase() === "true",
   mapsApiKey: process.env.MAPS_API_KEY || "",
   nodeEnv: process.env.NODE_ENV || "development",
 });
