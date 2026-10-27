@@ -4,49 +4,32 @@ const { verification } = require("../prompts/systemPrompts");
 const schema = {
   type: "OBJECT",
   properties: {
-    isVerified: { type: "BOOLEAN" },
-    verificationConfidence: { type: "NUMBER" },
-    remarks: { type: "STRING" },
+    isResolved: { type: "BOOLEAN" },
+    verificationConfidence: { type: "NUMBER", minimum: 0, maximum: 1 },
+    auditNotes: { type: "STRING" },
+    visualMatch: { type: "BOOLEAN" },
   },
-  required: ["isVerified", "verificationConfidence", "remarks"],
+  required: ["isResolved", "verificationConfidence", "auditNotes", "visualMatch"],
+};
+
+const defaultValues = {
+  isResolved: false,
+  verificationConfidence: 0,
+  auditNotes: "Bukti visual tidak dapat diaudit oleh AI; verifikasi manual diperlukan.",
+  visualMatch: false,
 };
 
 /**
- * Verifies field repair evidence against the original report.
+ * Compares before and after repair evidence using multimodal providers.
  * @param {object} evidence
  * @returns {Promise<object>}
  */
 async function verifyRepair(evidence) {
-  const missingFields = [
-    "originalReport",
-    "proofPhotoBase64",
-    "officerNotes",
-  ].filter(
-    (field) =>
-      !evidence ||
-      evidence[field] === undefined ||
-      evidence[field] === null ||
-      (typeof evidence[field] === "string" && !evidence[field].trim()),
-  );
-  if (missingFields.length) {
-    const error = new Error(
-      `Missing required fields: ${missingFields.join(", ")}`,
-    );
-    error.statusCode = 400;
-    throw error;
+  const images = [];
+  for (const url of [evidence.beforePhotoUrl, evidence.afterPhotoUrl]) {
+    if (url) images.push({ fileData: { fileUri: url, mimeType: "image/jpeg" } });
   }
-
-  const cleanProofPhotoBase64 = evidence.proofPhotoBase64.replace(
-    /^data:image\/\w+;base64,/,
-    "",
-  );
-  const images = [
-    {
-      inlineData: { mimeType: "image/jpeg", data: cleanProofPhotoBase64 },
-    },
-  ];
-  const { proofPhotoBase64, ...textEvidence } = evidence;
-  return runStructuredLlm(verification, textEvidence, schema, images);
+  return runStructuredLlm(verification, evidence, schema, defaultValues, images);
 }
 
 module.exports = verifyRepair;
